@@ -5,19 +5,30 @@ KSIZES=[21, 31, 51]
 
 rule all:
     input:
-        expand('output/{g}.sig.zip', g=GENOMES)
-
+        expand('output/{g}.sig.zip', g=GENOMES),
+        expand('output/k51.s10_000/{g}.sig.zip', g=GENOMES),
 
 rule sketch:
     input:
         'genomes/{g}.fa.gz',
     output:
-        'output/{g}.sig.zip',
+        json=temporary('output/{g}.sig'),
+        zip='output/{g}.sig.zip',
     params:
         p=",".join([ f'k={k}' for k in KSIZES ]),
     shell: """
-        sourmash scripts singlesketch {input} -o {output} \
+        sourmash scripts singlesketch {input} -o {output.json} \
            --name {wildcards.g} -p {params.p}
+        sourmash sig cat {output.json} -o {output.zip}
+    """
+
+rule downsample_k51_s100_000:
+    input:
+        'output/{g}.sig.zip',
+    output:
+        'output/k51.s10_000/{g}.sig.zip',
+    shell: """
+        sourmash sig downsample {input} -o {output} -k 51 --scaled=100_000
     """
 
 rule hg38_download:
@@ -47,7 +58,8 @@ rule hg38_sketch:
         fasta = "downloads/hg38/chroms/*",
         p=",".join([ f'k={k}' for k in KSIZES ]),
     shell: """
-        sourmash sketch dna -o {output} -p {params.p} {params.fasta}
+        sourmash sketch dna -o {output} -p {params.p} {params.fasta} \
+           --name "hg38+alt"
     """
 
 ruleorder: hg38_sketch > sketch
